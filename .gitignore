@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+venv/
+
+# Environment variables (SECRETS - never push these)
+.env
+.env.local
+.env.production
+
+# Build output
+frontend/dist/
+
+# Misc
+package-lock.json
+__pycache__/
+*.pyc
+*.zip
+.DS_Store
+__MACOSX/
+backend/uploads/
