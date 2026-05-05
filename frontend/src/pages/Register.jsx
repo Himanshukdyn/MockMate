@@ -81,10 +81,10 @@ const Register = () => {
     <div className='flex justify-center items-center min-h-[90vh] bg-gray-50 dark:bg-slate-950 sm:px-6 py-10'>
       <div className='w-full max-w-md bg-white dark:bg-slate-900 p-6 sm:p-10 border border-gray-200 dark:border-slate-800 rounded-2xl shadow-xl dark:shadow-none' >
         <div className='text-center mb-8'>
-          <h2 className='text-xs font-black uppercase tracking-[0.3em] text-teal-600 dark:text-teal-400 mb-2'>AI Interviewer</h2>
+          <h2 className='text-xs font-black uppercase tracking-[0.3em] text-teal-600 dark:text-teal-400 mb-2'>MockMate AI</h2>
           <h1 className='text-3xl sm:text-4xl font-black text-gray-900 dark:text-white leading-tight'>Get <span className='text-teal-500'>Started</span></h1>
           <p className='text-gray-500 dark:text-slate-400 mt-3 text-sm sm:text-base px-2'>
-            Join thousands of developers practicing with AI Interviewer
+            Join thousands of developers practicing with MockMate AI
           </p>
         </div>
 

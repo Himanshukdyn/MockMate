@@ -30,7 +30,7 @@ const Header = () => {
             </svg>
 
           </div>
-          <span className=" text-lg sm:text-xl font-black tracking-tighter uppercase text-white group-hover:text-teal-400 transition-colors">AI <span className="text-teal-500">INT</span><span className="hidden sm:inline">erviewer</span></span>
+          <span className=" text-lg sm:text-xl font-black tracking-tighter uppercase text-white group-hover:text-teal-400 transition-colors">Mock<span className="text-teal-500">Mate</span><span className="hidden sm:inline"> AI</span></span>
         </Link>
         <nav className="hidden md:flex items-center space-x-6">
           {user ? (<>
