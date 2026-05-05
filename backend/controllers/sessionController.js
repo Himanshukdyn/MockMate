@@ -9,6 +9,8 @@ import mongoose from 'mongoose';
 import { createRequire } from 'module';
 import { exec } from 'child_process';
 import util from 'util';
+import pdfParse from 'pdf-parse';
+
 const execPromise = util.promisify(exec);
 const require = createRequire(import.meta.url);
 // URL for the Python AI Microservice (Must match Step 6 setup)
