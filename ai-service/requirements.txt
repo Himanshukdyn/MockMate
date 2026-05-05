@@ -9,3 +9,4 @@ pydub
 ffmpeg-python
 python-multipart
 groq
+pyaudioop
