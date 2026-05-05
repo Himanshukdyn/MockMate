@@ -5,7 +5,8 @@ import { socketUpdateSession } from '../features/sessions/sessionSlice';
 import { useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 
-const BACKEND_URL = 'http://localhost:5000';
+// Use the current domain in production, or localhost in development
+const BACKEND_URL = import.meta.env.PROD ? window.location.origin : 'http://localhost:5000';
 
 const useSocket = () => {
   const dispatch = useDispatch();
