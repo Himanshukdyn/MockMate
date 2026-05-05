@@ -9,10 +9,10 @@ import mongoose from 'mongoose';
 import { createRequire } from 'module';
 import { exec } from 'child_process';
 import util from 'util';
-import pdfParse from 'pdf-parse';
 
 const execPromise = util.promisify(exec);
 const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 // URL for the Python AI Microservice (Must match Step 6 setup)
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
