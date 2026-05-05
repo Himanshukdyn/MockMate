@@ -14,7 +14,7 @@ import pdfParse from 'pdf-parse';
 const execPromise = util.promisify(exec);
 const require = createRequire(import.meta.url);
 // URL for the Python AI Microservice (Must match Step 6 setup)
-const AI_SERVICE_URL = 'http://localhost:8000';
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
 // Helper function to send an update via Socket.io
 const pushSocketUpdate = (io, userId, sessionId, status, message, session = null) => {
