@@ -17,7 +17,7 @@ load_dotenv()
 AI_SERVICE_PORT = int(os.getenv("AI_SERVICE_PORT",8000))
 OLLAMA_MODEL_NAME=os.getenv("OLLAMA_MODEL_NAME","mistral")
 GROQ_API_KEY=os.getenv("GROQ_API_KEY","")
-GROQ_MODEL_NAME=os.getenv("GROQ_MODEL_NAME","mistral-saba-24b")
+GROQ_MODEL_NAME=os.getenv("GROQ_MODEL_NAME","llama-3.3-70b-versatile")
 
 # --- Groq Client Setup ---
 groq_client = None
