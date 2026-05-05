@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { createSession, getSessions,reset,deleteSession } from '../features/sessions/sessionSlice'
 import { toast } from 'react-toastify'
 import SessionCard from "../components/SessionCard"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 
 const ROLES = [
   "MERN Stack Developer",
@@ -42,6 +43,7 @@ const Dashboard = () => {
     interviewType: TYPES[1].value,
     count: COUNTS[0],
   });
+  const [resumeFile, setResumeFile] = useState(null);
 
   useEffect(() => {
     dispatch(getSessions());
@@ -60,7 +62,15 @@ const Dashboard = () => {
 
   const onSubmit = (e) => {
     e.preventDefault();
-    dispatch(createSession(formData));
+    const data = new FormData();
+    data.append('role', formData.role);
+    data.append('level', formData.level);
+    data.append('interviewType', formData.interviewType);
+    data.append('count', formData.count);
+    if (resumeFile) {
+       data.append('resume', resumeFile);
+    }
+    dispatch(createSession(data));
   }
 
   const viewSession = (session) => {
@@ -74,13 +84,32 @@ const Dashboard = () => {
   }
 
 
-  const handleDelete = (e, sessionId) => {
+    const handleDelete = (e, sessionId) => {
     e.stopPropagation();
     if (window.confirm('Are you sure you want to delete this session?')) {
       dispatch(deleteSession(sessionId));
       toast.error('Session Deleted')
     }
   }
+
+  // Analytics Data Preparation
+  const completedSessions = [...sessions].filter(s => s.status === 'completed').reverse(); // oldest to newest for chart
+  const trendData = completedSessions.map((s, index) => ({
+    name: `Session ${index + 1}`,
+    score: s.overallScore || 0,
+    technical: s.metrics?.avgTechnical || 0,
+    confidence: s.metrics?.avgConfidence || 0
+  }));
+
+  // Average radar data
+  const avgTech = trendData.length > 0 ? Math.round(trendData.reduce((acc, curr) => acc + curr.technical, 0) / trendData.length) : 0;
+  const avgConf = trendData.length > 0 ? Math.round(trendData.reduce((acc, curr) => acc + curr.confidence, 0) / trendData.length) : 0;
+  const radarData = [
+    { subject: 'Technical', A: avgTech, fullMark: 100 },
+    { subject: 'Confidence', A: avgConf, fullMark: 100 },
+    { subject: 'Problem Solving', A: Math.round((avgTech + avgConf) / 2), fullMark: 100 }, 
+    { subject: 'Communication', A: avgConf, fullMark: 100 }, 
+  ];
 
 
 
@@ -129,11 +158,52 @@ const Dashboard = () => {
             <select name="interviewType" value={formData.interviewType} onChange={onChange} className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-xl sm:rounded-2xl p-3 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-teal-500">
               {TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select>
           </div>
-          <button type="submit" disabled={isProcessing} className={`w-full h-[48px] rounded-xl font-bold text-white flex items-center justify-center gap-2 ${isProcessing ? 'bg-slate-300' : 'bg-teal-600 hover:bg-teal-700'}`}>
+          <div className="space-y-1.5 lg:col-span-2">
+             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Upload Resume (PDF)</label>
+             <input type="file" accept=".pdf" onChange={(e) => setResumeFile(e.target.files[0])} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl sm:rounded-2xl p-2.5 text-sm text-slate-700 dark:text-slate-200 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 dark:file:bg-teal-900/30 dark:file:text-teal-400" />
+          </div>
+          <button type="submit" disabled={isProcessing} className={`w-full lg:col-span-3 h-[48px] rounded-xl font-bold text-white flex items-center justify-center gap-2 ${isProcessing ? 'bg-slate-300' : 'bg-teal-600 hover:bg-teal-700'}`}>
             {isProcessing ? <><span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span> Generating...</> : <span className="text-sm">Start Interview</span>}
           </button>
         </form>
-</div> {/* 3. Closing div for the card moved here */}
+      </div>
+
+      {/* ANALYTICS SECTION */}
+      {completedSessions.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-xl shadow-slate-200 dark:shadow-none border border-slate-100 dark:border-slate-800">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Performance Trend</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} domain={[0, 100]} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="#0d9488" strokeWidth={3} dot={{ r: 4, fill: '#0d9488' }} activeDot={{ r: 6 }} name="Overall Score" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-xl shadow-slate-200 dark:shadow-none border border-slate-100 dark:border-slate-800">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">Skill Breakdown</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                  <PolarGrid stroke="#334155" opacity={0.3} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name="Skills" dataKey="A" stroke="#0d9488" fill="#14b8a6" fillOpacity={0.5} />
+                  <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* HISTORY LIST (Now separate from the creation card) */}
       <div className="space-y-6 pb-20 sm:pb-0">

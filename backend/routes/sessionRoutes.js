@@ -5,10 +5,11 @@ import {
     endSession, 
     getSessionById, 
     getSessions, 
-    submitAnswer
+    submitAnswer,
+    executeCode
 } from "../controllers/sessionController.js";
 import { protect } from "../middleware/authMiddleware.js";
-import { uploadSingleAudio } from "../middleware/uploadMiddleware.js";
+import { uploadSingleAudio, uploadSingleResume } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.use(protect);
 // 1. Root Routes ("/")
 router.route("/")
     .get(getSessions)      // Fetch all sessions
-    .post(createSession);  // Create new session
+    .post(uploadSingleResume, createSession);  // Create new session
 
 // 2. ID Routes ("/:id")
 router.route("/:id")
@@ -26,6 +27,7 @@ router.route("/:id")
     .delete(deleteSession); // Delete session
 
 // 3. Action Routes
+router.route("/execute").post(executeCode);
 router.route("/:id/submit-answer").post(uploadSingleAudio, submitAnswer);
 router.route("/:id/end").post(endSession);
 

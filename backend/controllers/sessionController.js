@@ -6,6 +6,11 @@ import fs from 'fs'; // <-- NEW: For reading and deleting the temporary file
 import FormData from 'form-data'; // <-- NEW: For sending files to FastAPI
 import path from 'path';
 import mongoose from 'mongoose';
+import { createRequire } from 'module';
+import { exec } from 'child_process';
+import util from 'util';
+const execPromise = util.promisify(exec);
+const require = createRequire(import.meta.url);
 // URL for the Python AI Microservice (Must match Step 6 setup)
 const AI_SERVICE_URL = 'http://localhost:8000';
 
@@ -31,6 +36,19 @@ const createSession = asyncHandler(async (req, res) => {
     if (!role || !level || !interviewType || !count) {
         res.status(400);
         throw new Error('Please specify role, level, interview type, and question count.');
+    }
+
+    let resumeText = "";
+    if (req.file) {
+        try {
+            const dataBuffer = fs.readFileSync(req.file.path);
+            const data = await pdfParse(dataBuffer);
+            resumeText = data.text;
+            fs.unlinkSync(req.file.path);
+        } catch (error) {
+            console.error("PDF Parse error:", error);
+            if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        }
     }
 
     // 1. Create the session placeholder in MongoDB
@@ -67,8 +85,9 @@ const createSession = asyncHandler(async (req, res) => {
                 body: JSON.stringify({
                     role,
                     level,
-                    count,
-                    interview_type: interviewType // ADD THIS LINE
+                    count: parseInt(count),
+                    interview_type: interviewType,
+                    resume_text: resumeText
                 }),
             });
 
@@ -180,11 +199,16 @@ const evaluateAnswerAsync = async (io, userId, sessionId, questionIndex, audioFi
             const formData = new FormData();
             formData.append('file', fs.createReadStream(audioFilePath));
 
+            const transcribeController = new AbortController();
+            const transcribeTimeout = setTimeout(() => transcribeController.abort(), 60000); // 60s timeout
+
             const transResponse = await fetch(`${AI_SERVICE_URL}/transcribe`, {
                 method: 'POST',
                 body: formData,
                 headers: formData.getHeaders(),
+                signal: transcribeController.signal,
             });
+            clearTimeout(transcribeTimeout);
 
             if (!transResponse.ok) throw new Error('Transcription service failed');
 
@@ -202,18 +226,23 @@ const evaluateAnswerAsync = async (io, userId, sessionId, questionIndex, audioFi
     try {
         pushSocketUpdate(io, userId, sessionId, 'AI_EVALUATING', `AI is analyzing Q${questionIdx + 1}...`);
 
+        const evalController = new AbortController();
+        const evalTimeout = setTimeout(() => evalController.abort(), 90000); // 90s timeout
+
         const evalResponse = await fetch(`${AI_SERVICE_URL}/evaluate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 question: question.questionText,
-                question_type: question.questionType, // Tells AI if it should expect code
+                question_type: question.questionType,
                 role: session.role,
                 level: session.level,
-                user_answer: transcription, // Dedicated transcription field
-                user_code: code || "",      // Dedicated code field
+                user_answer: transcription,
+                user_code: code || "",
             }),
+            signal: evalController.signal,
         });
+        clearTimeout(evalTimeout);
 
         if (!evalResponse.ok) throw new Error('AI Evaluation service failed');
 
@@ -260,7 +289,13 @@ const evaluateAnswerAsync = async (io, userId, sessionId, questionIndex, audioFi
 
     } catch (error) {
         console.error(`Evaluation Error: ${error.message}`);
-        pushSocketUpdate(io, userId, sessionId, 'EVALUATION_FAILED', `Evaluation failed.`, session);
+        // Unlock the question so the user can re-submit
+        const failedSession = await Session.findById(sessionId);
+        if (failedSession && failedSession.questions[questionIdx]) {
+            failedSession.questions[questionIdx].isSubmitted = false;
+            await failedSession.save();
+        }
+        pushSocketUpdate(io, userId, sessionId, 'EVALUATION_FAILED', `Evaluation failed for Q${questionIdx + 1}. You can re-submit.`, failedSession);
     }
 };
 
@@ -387,6 +422,51 @@ const endSession = asyncHandler(async (req, res) => {
     res.json({ message: 'Session ended successfully.', session });
 });
 
+const executeCode = asyncHandler(async (req, res) => {
+    const { language, code } = req.body;
+    
+    if (!code) {
+        return res.status(400).json({ message: "No code provided" });
+    }
+
+    const WANDBOX_COMPILERS = {
+        javascript: "nodejs-20.17.0",
+        typescript: "typescript-5.6.2",
+        python: "cpython-head",
+        java: "openjdk-jdk-22+36",
+        cpp: "gcc-head",
+        csharp: "dotnetcore-8.0.402",
+        go: "go-1.23.2",
+        swift: "swift-6.0.1",
+        r: "r-4.4.1",
+        sql: "sqlite-3.46.1"
+    };
+
+    const compiler = WANDBOX_COMPILERS[language] || "nodejs-20.17.0";
+
+    try {
+        const response = await fetch('https://wandbox.org/api/compile.json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                compiler: compiler,
+                code: code
+            })
+        });
+
+        const result = await response.json();
+        const output = result.program_message || result.compiler_error || result.compiler_message || "No output";
+        
+        if (result.status === "0") {
+            res.json({ run: { code: 0, output } });
+        } else {
+            res.json({ run: { code: 1, output } });
+        }
+    } catch (e) {
+        res.status(500).json({ message: "Execution error: " + e.message });
+    }
+});
+
 export {
     createSession,
     getSessionById,
@@ -394,8 +474,6 @@ export {
     submitAnswer,
     endSession,
     calculateOverallScore,
-    deleteSession
+    deleteSession,
+    executeCode
 };
-
-
-

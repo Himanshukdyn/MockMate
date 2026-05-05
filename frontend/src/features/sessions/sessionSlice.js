@@ -120,6 +120,8 @@ export const sessionSlice = createSlice({
                     const incomingQ = session.questions[index];
                     if (!incomingQ) return currentQ;
                     if (incomingQ.isEvaluated) return incomingQ;
+                    // Allow EVALUATION_FAILED to unlock a stuck question
+                    if (status === 'EVALUATION_FAILED') return incomingQ;
                     if (currentQ.isSubmitted && !incomingQ.isSubmitted) return currentQ;
                     return incomingQ;
                 });

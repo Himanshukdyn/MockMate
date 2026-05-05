@@ -27,6 +27,19 @@ const SUPPORTED_LANGUAGES = [
   { label: 'Plain Text', value: 'plaintext' },
 ];
 
+const PISTON_LANGUAGE_VERSIONS = {
+  javascript: "18.15.0",
+  typescript: "5.0.3",
+  python: "3.10.0",
+  java: "15.0.2",
+  cpp: "10.2.0",
+  csharp: "6.12.0",
+  go: "1.16.2",
+  swift: "5.3.3",
+  kotlin: "1.8.20",
+  r: "4.1.1",
+};
+
 const ROLE_LANGUAGE_MAP = {
   "MERN Stack Developer": "javascript",
   "MEAN Stack Developer": "typescript",
@@ -53,9 +66,12 @@ function InterviewRunner() {
   const dispatch = useDispatch();
 
   const { activeSession, isLoading, message } = useSelector(state => state.sessions);
+  const { user } = useSelector(state => state.auth);
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
+  const [executionResult, setExecutionResult] = useState(null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
 
   // If submittedLocal[0] is true, we lock Question 0 immediately.
@@ -111,8 +127,21 @@ function InterviewRunner() {
   const handleNavigation = (index) => {
     if (index >= 0 && index < activeSession?.questions.length) {
       if (isRecording) stopRecording();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       setCurrentQuestionIndex(index);
       setRecordingTime(0);
+      setExecutionResult(null);
+    }
+  };
+
+  const speakQuestion = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); 
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95; 
+      window.speechSynthesis.speak(utterance);
+    } else {
+      toast.error("Text-to-speech is not supported in this browser.");
     }
   };
 
@@ -122,6 +151,45 @@ function InterviewRunner() {
       ...prev,
       [currentQuestionIndex]: { ...prev[currentQuestionIndex], code: newCode }
     }));
+  };
+
+  const handleRunCode = async () => {
+    const code = drafts[currentQuestionIndex]?.code;
+    if (!code) {
+      toast.error("Please write some code to run.");
+      return;
+    }
+
+    setIsExecuting(true);
+    setExecutionResult({ status: 'Running...', output: '' });
+
+    try {
+      const response = await fetch('/api/sessions/execute', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user?.token}`
+        },
+        body: JSON.stringify({
+          language: selectedLanguage,
+          code: code
+        })
+      });
+      const result = await response.json();
+      
+      if (result.run) {
+        setExecutionResult({
+          status: result.run.code === 0 ? 'Success' : 'Error',
+          output: result.run.output || 'No output'
+        });
+      } else {
+         setExecutionResult({ status: 'Error', output: result.message || 'Execution failed' });
+      }
+    } catch (error) {
+      setExecutionResult({ status: 'Error', output: 'Network error occurred while trying to execute code.' });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const startRecording = async () => {
@@ -244,8 +312,17 @@ function InterviewRunner() {
         </button>
       </div>
 
-      <div className="bg-slate-900 dark:bg-slate-950 dark:border dark:border-slate-800 text-white p-8 rounded-3xl shadow-xl mb-6">
-        <span className="text-blue-400 text-xs font-bold uppercase tracking-widest">Question {currentQuestionIndex + 1}</span>
+      <div className="bg-slate-900 dark:bg-slate-950 dark:border dark:border-slate-800 text-white p-8 rounded-3xl shadow-xl mb-6 relative">
+        <div className="flex justify-between items-start">
+          <span className="text-blue-400 text-xs font-bold uppercase tracking-widest">Question {currentQuestionIndex + 1}</span>
+          <button 
+            onClick={() => speakQuestion(currentQuestion?.questionText)}
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full text-slate-300 transition-colors flex items-center justify-center"
+            title="Read Question Aloud"
+          >
+            🔊
+          </button>
+        </div>
         <h2 className="text-2xl mt-2 font-medium leading-relaxed">{currentQuestion?.questionText}</h2>
       </div>
 
@@ -270,8 +347,13 @@ function InterviewRunner() {
               <p className="mt-4 font-mono text-rose-500 font-bold">{recordingTime}s</p>
             </div>
           ) : (
-            <div className="text-center">
+            <div className="text-center flex flex-col items-center">
               <div className="text-emerald-500 font-bold text-lg mb-2">Audio Captured ✅</div>
+              <audio 
+                 src={currentDraft.audioBlob ? URL.createObjectURL(currentDraft.audioBlob) : ''} 
+                 controls 
+                 className="mb-4 h-10 w-full max-w-[250px]"
+              />
               {!isQuestionLocked && (
                 <button onClick={() => setDrafts(prev => ({ ...prev, [currentQuestionIndex]: { ...prev[currentQuestionIndex], audioBlob: null } }))} className="text-xs text-slate-400 underline hover:text-rose-500">
                   Delete & Re-record
@@ -299,22 +381,43 @@ function InterviewRunner() {
             )}
           </div>
           
-          <div className="flex-1 min-h-[350px]">
+          <div className="flex-1 min-h-[350px] flex flex-col">
             {currentQuestion?.questionType === 'coding' ? (
-                <MonacoEditor
-                  height="100%"
-                  language={selectedLanguage}
-                  theme="vs-dark"
-                  value={currentDraft.code || ''}
-                  onChange={updateDraftCode}
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 13,
-                    scrollBeyondLastLine: false,
-                    readOnly: isQuestionLocked,
-                    domReadOnly: isQuestionLocked
-                  }}
-                />
+                <>
+                  <div className="flex-1">
+                    <MonacoEditor
+                      height="100%"
+                      language={selectedLanguage}
+                      theme="vs-dark"
+                      value={currentDraft.code || ''}
+                      onChange={updateDraftCode}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 13,
+                        scrollBeyondLastLine: false,
+                        readOnly: isQuestionLocked,
+                        domReadOnly: isQuestionLocked
+                      }}
+                    />
+                  </div>
+                  
+                  {/* EXECUTION BAR */}
+                  <div className="bg-slate-950 border-t border-slate-800 p-2 shrink-0">
+                     <button 
+                       onClick={handleRunCode}
+                       disabled={isQuestionLocked || isExecuting}
+                       className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 text-white px-4 py-1.5 rounded text-sm font-bold flex items-center gap-2"
+                     >
+                       {isExecuting ? 'Running...' : '▶ Run Code'}
+                     </button>
+                     
+                     {executionResult && (
+                       <div className={`mt-2 p-3 rounded text-sm font-mono whitespace-pre-wrap max-h-40 overflow-y-auto ${executionResult.status === 'Success' ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-900' : executionResult.status === 'Running...' ? 'bg-slate-900 text-slate-400' : 'bg-rose-950/30 text-rose-400 border border-rose-900'}`}>
+                          {executionResult.output}
+                       </div>
+                     )}
+                  </div>
+                </>
             ) : (
                 <textarea
                     value={currentDraft.code || ''}

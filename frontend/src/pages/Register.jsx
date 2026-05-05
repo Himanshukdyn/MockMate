@@ -1,8 +1,9 @@
 import {useState,useEffect} from 'react'
 import {useSelector,useDispatch} from 'react-redux'
-import {register,reset} from '../features/auth/authSlice'
 import { useNavigate,Link } from 'react-router-dom'
 import {toast} from 'react-toastify'
+import { GoogleLogin } from '@react-oauth/google'
+import { register, googleLogin, reset } from '../features/auth/authSlice'
 
 
 
@@ -60,6 +61,14 @@ const Register = () => {
     }
   }
 
+  const handleGoogleSuccess = (credentialResponse) => {
+    if (credentialResponse.credential) {
+      dispatch(googleLogin(credentialResponse.credential))
+    } else {
+      toast.error('Something went wrong. Please try again.')
+    }
+  }
+
   if(isLoading){
     return(
       <div className='flex justify-center items-center h-screen'>
@@ -100,6 +109,24 @@ const Register = () => {
           </div>
           <button type="submit" className='w-full bg-teal-600 text-white p-3.5 rounded-xl font-bold hover:bg-teal-700 transition-all shadow-lg shadow-teal-100 mt-4 active:scale-[0.98]'>Create My Account</button>
         </form>
+
+        <div className="my-8 flex items-center">
+          <div className="flex-grow border-t border-gray-300 dark:border-slate-800"></div>
+          <span className="mx-4 text-gray-400 dark:text-slate-500 text-[10px] font-black tracking-widest uppercase">Or</span>
+          <div className="flex-grow border-t border-gray-300 dark:border-slate-800"></div>
+        </div>
+
+        <div className="w-full flex items-center justify-center">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => toast.error('Google signup failed')}
+            theme="outline"
+            size="large"
+            width="100%"
+            text="signup_with"
+            shape="circle"
+          />
+        </div>
 
         <p className='mt-8 text-center text-sm text-gray-500 dark:text-slate-400 '>Already have an account? <Link to="/login" className='text-teal-600 dark:text-teal-400 font-bold hover:underline'>Sign In</Link></p>
 

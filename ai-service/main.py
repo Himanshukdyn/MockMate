@@ -43,21 +43,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-WHISPER_MODEL=None
-
-try:
-    print("Loading Whisper Model ...")
-    WHISPER_MODEL=whisper.load_model("base.en")
-    print("Whisper Model Loaded Successfully")
-except Exception as e:
-    print("Error while loading Whisper Model")
-    print(e)
+# Removed local Whisper model loading to use Groq API instead
 
 class QuestionResquest(BaseModel):
     role:str="MERN Stack Developer"
     level:str="Junior"
     count:int=5
     interview_type:str="coding-mix"
+    resume_text:Optional[str]=None
 
 
 class QuestionResponse(BaseModel):
@@ -151,10 +144,13 @@ async def generate_questions(request:QuestionResquest):
         else :
             intruction="All questions MUST be conceptual oral questions. Do Not generate any coding or implementation challenges."
 
+        resume_context = f"TAILOR TO RESUME: The candidate has the following resume text:\n{request.resume_text}\nPlease heavily tailor the questions to the specific skills, projects, and technologies mentioned in this resume." if request.resume_text else ""
+
         system_prompt=(
             "You are a professional technical interviewer. "
             "Task: Generate interview questions. No conversational text or numbering. "
-            f"Crucial : {intruction}"
+            f"Crucial : {intruction} "
+            f"{resume_context} "
             "Output exactly one question per line. "
         )
 
@@ -172,26 +168,36 @@ async def generate_questions(request:QuestionResquest):
     
 
 @app.post("/transcribe")
-async def transcribe_audio(file:UploadFile=File(...)):
+async def transcribe_audio(file: UploadFile = File(...)):
     try:
-        audio_bytes=await file.read()
-        audio_in_memory=io.BytesIO(audio_bytes)
-        audio_segment=AudioSegment.from_file(audio_in_memory)
-        with tempfile.NamedTemporaryFile(delete=False,suffix=".mp3") as tmp:
-            temp_audio_path=tmp.name
-            audio_segment.export(temp_audio_path,format="mp3")
-        if not WHISPER_MODEL:
-            raise HTTPException(status_code=503,detail="Whisper Model is not loaded")
+        if not groq_client:
+            raise HTTPException(status_code=503, detail="Groq client is not initialized")
+            
+        audio_bytes = await file.read()
         
-        result=WHISPER_MODEL.transcribe(temp_audio_path)
-                
-        os.remove(temp_audio_path)
-        return {"transcription":result["text"].strip()}
+        # Write bytes to a temporary file with .webm extension so Groq recognizes it
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as tmp:
+            tmp.write(audio_bytes)
+            temp_audio_path = tmp.name
+            
+        try:
+            # Send directly to Groq Whisper API (supports .webm)
+            with open(temp_audio_path, "rb") as audio_file:
+                transcription = groq_client.audio.transcriptions.create(
+                    file=(os.path.basename(temp_audio_path), audio_file.read()),
+                    model="whisper-large-v3",
+                    response_format="json",
+                )
+            
+            return {"transcription": transcription.text.strip()}
+        finally:
+            # Ensure cleanup happens even if API fails
+            if os.path.exists(temp_audio_path):
+                os.remove(temp_audio_path)
 
     except Exception as e:
-        if 'temp_audio_path' in locals() and os.path.exists(temp_audio_path):
-            os.remove(temp_audio_path)
-        raise HTTPException(status_code=500,detail=str(e))
+        print(f"Transcription error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/evaluate",response_model=EvaluationResponse)
 async def evaluate(request:EvaluationRequest):

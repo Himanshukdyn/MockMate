@@ -29,4 +29,21 @@ const upload = multer({
 });
 
 const uploadSingleAudio = upload.single("audioFile");
-export { uploadSingleAudio };
+
+const docFileFilter = (req, file, cb) => {
+    if (file.mimetype === "application/pdf") {
+        cb(null, true);
+    } else {
+        cb(new Error("Not a PDF file"), false);
+    }
+};
+
+const uploadDoc = multer({
+    storage: storage,
+    fileFilter: docFileFilter,
+    limits: { fileSize: 1024 * 1024 * 10 },
+});
+
+const uploadSingleResume = uploadDoc.single("resume");
+
+export { uploadSingleAudio, uploadSingleResume };
